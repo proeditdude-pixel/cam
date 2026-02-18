@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Basketball Shot Trigger</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://unpkg.com/ml5@latest/dist/ml5.min.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; margin: 0 auto; border: 5px solid #333; }
+        .instructions {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            color: white; font-family: sans-serif; pointer-events: none;
+            text-shadow: 2px 2px 4px #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="instructions">Step back and take a "Shot" to trigger the image!</div>
+
+    <script>
+        let video;
+        let poseNet;
+        let pose;
+        let basketballImg;
+        let imgUrl = 'https://preview.redd.it/pi38ojxhy3801.png?auto=webp&s=9da1f554e316d41251505a76412e5b2d92aec33d';
+
+        function preload() {
+            // Load your Reddit image
+            basketballImg = loadImage(imgUrl);
+        }
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            video = createCapture(VIDEO);
+            video.size(width, height);
+            video.hide(); // Hide the raw video, we will draw it on canvas
+
+            // Start PoseNet
+            poseNet = ml5.poseNet(video, () => console.log("AI Model Loaded!"));
+            poseNet.on('pose', (results) => {
+                if (results.length > 0) pose = results[0].pose;
+            });
+        }
+
+        function draw() {
+            // Flip the video for a mirror effect
+            push();
+            translate(width, 0);
+            scale(-1, 1);
+            image(video, 0, 0, width, height);
+            pop();
+
+            if (pose) {
+                // Tracking Right Wrist and Nose
+                let rWrist = pose.rightWrist;
+                let nose = pose.nose;
+
+                // DETECT THE SHOT: 
+                // If wrist is higher than the nose (Y value is smaller at the top)
+                if (rWrist.y < nose.y - 100 && rWrist.confidence > 0.2) {
+                    
+                    // Draw the image on the right side
+                    // We draw it at x: 50 (left side of flipped screen)
+                    image(basketballImg, 50, 50, 300, 300);
+                    
+                    // Add some Text
+                    fill(255, 204, 0);
+                    stroke(0);
+                    strokeWeight(4);
+                    textSize(60);
+                    textAlign(CENTER);
+                    text("KOBE!", width / 2, 100);
+                }
+            }
+        }
+
+        // Adjust canvas if window is resized
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+</body>
+</html>
