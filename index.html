@@ -1,232 +1,182 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gesture RPS</title>
+    <title>V3</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
     <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.0.2/dist/fingerpose.js"></script>
 
     <style>
-        :root {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --accent: #38bdf8;
-            --text: #f8fafc;
-        }
-
+        :root { --bg: #0b0e14; --card: #161b22; --accent: #58a6ff; --text: #c9d1d9; }
         body {
-            margin: 0;
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: -apple-system, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: -apple-system, system-ui, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden;
         }
-
-        #game-container {
-            position: relative;
-            width: 90vw;
-            max-width: 500px;
-            background: var(--card);
-            padding: 30px;
-            border-radius: 32px;
-            text-align: center;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+        #game-box {
+            width: 90vw; max-width: 450px; background: var(--card);
+            border-radius: 24px; padding: 25px; text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
         }
-
-        .video-box {
-            position: relative;
-            width: 100%;
-            aspect-ratio: 1/1;
-            background: #000;
-            border-radius: 20px;
-            overflow: hidden;
-            margin: 20px 0;
-            border: 2px solid #334155;
+        .view-container {
+            position: relative; width: 100%; aspect-ratio: 4/3;
+            background: #000; border-radius: 16px; overflow: hidden; margin: 15px 0;
         }
-
         video, canvas {
-            position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
         }
-
-        #start-overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.95);
-            z-index: 10;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border-radius: 20px;
+        #overlay {
+            position: absolute; inset: 0; background: rgba(11, 14, 20, 0.9);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 5; border-radius: 16px;
         }
-
+        #result { font-size: 2.5rem; font-weight: 900; color: var(--accent); margin: 15px 0; height: 3.5rem; }
+        .score { display: flex; justify-content: space-around; font-weight: bold; font-size: 1.1rem; opacity: 0.7; }
         button {
-            background: var(--accent);
-            color: var(--bg);
-            border: none;
-            padding: 18px 36px;
-            font-size: 1.1rem;
-            font-weight: 800;
-            border-radius: 16px;
-            cursor: pointer;
+            background: var(--accent); color: #fff; border: none; padding: 15px 35px;
+            font-size: 1rem; font-weight: bold; border-radius: 50px; cursor: pointer;
         }
-
-        #result-text {
-            font-size: 2.2rem;
-            font-weight: 900;
-            height: 3rem;
-            color: var(--accent);
-        }
-
-        .score-row {
-            display: flex;
-            justify-content: space-between;
-            font-weight: 700;
-            opacity: 0.8;
-            margin-bottom: 10px;
-        }
-
-        .loader {
-            width: 24px;
-            height: 24px;
-            border: 3px solid #fff;
-            border-bottom-color: transparent;
-            border-radius: 50%;
-            display: inline-block;
-            animation: rotation 1s linear infinite;
-            margin-bottom: 15px;
-        }
-
-        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .hidden { display: none !important; }
+        .loading-text { color: #8b949e; margin-top: 10px; font-size: 0.9rem; }
+        svg { fill: currentColor; }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <div class="score-row">
-        <span>PLAYER: <span id="p-score">0</span></span>
-        <span>CPU: <span id="c-score">0</span></span>
+<div id="game-box">
+    <div class="score">
+        <div>YOU: <span id="p-score">0</span></div>
+        <div>CPU: <span id="c-score">0</span></div>
     </div>
 
-    <div class="video-box">
-        <video id="video" playsinline muted></video>
-        <canvas id="canvas"></canvas>
+    <div class="view-container">
+        <video id="webcam" playsinline muted></video>
+        <canvas id="output"></canvas>
         
-        <div id="start-overlay">
-            <div id="loading-spinner" class="hidden"><span class="loader"></span></div>
-            <button id="start-btn">START GAME</button>
-            <p id="status" style="margin-top: 15px; font-size: 0.8rem; color: #94a3b8;">Click to initialize AI and Camera</p>
+        <div id="overlay">
+            <button id="start-btn">START CAMERA</button>
+            <div id="status" class="loading-text">Ready to initialize</div>
         </div>
     </div>
 
-    <div id="result-text">READY?</div>
-    <div id="cpu-icon" style="margin-top:10px;">
-        <svg width="40" height="40" fill="#64748b" viewBox="0 0 24 24"><path d="M20 9V7c0-1.1-.9-2-2-2h-3V3h-2v2h-2V3H9v2H6c-1.1 0-2 .9-2 2v2H2v2h2v2H2v2h2v2c0 1.1.9 2 2 2h3v2h2v-2h2v2h2v-2h3c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2zm-4 6H8V8h8v7z"/></svg>
+    <div id="result">WAITING...</div>
+    
+    <div id="cpu-move-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24"><path d="M12 2c5.52 0 10 4.48 10 10s-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2m0 2c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8m0 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2m-3 7c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1m6 0c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/></svg>
     </div>
 </div>
 
 <script>
-    const video = document.getElementById('video');
-    const resultEl = document.getElementById('result-text');
-    let model, estimator;
+    const video = document.getElementById('webcam');
+    const resultDisplay = document.getElementById('result');
+    let detector, GE;
     let scores = { p: 0, c: 0 };
-    let cooldown = false;
+    let canPlay = true;
 
-    async function init() {
-        document.getElementById('start-btn').classList.add('hidden');
-        document.getElementById('loading-spinner').classList.remove('hidden');
+    async function setupDetector() {
+        const model = handPoseDetection.SupportedModels.MediaPipeHands;
+        const detectorConfig = {
+            runtime: 'tfjs', // Use TFJS with WebGL backend
+            modelType: 'lite', // Lite is essential for iPad memory
+            maxHands: 1
+        };
+        return await handPoseDetection.createDetector(model, detectorConfig);
+    }
+
+    async function start() {
+        const btn = document.getElementById('start-btn');
         const status = document.getElementById('status');
-        
+        btn.style.display = 'none';
+        status.innerText = "Loading AI models (iPad Optimized)...";
+
         try {
-            // 1. Setup Camera
+            // 1. Force WebGL (Standard for Safari)
+            await tf.setBackend('webgl');
+            
+            // 2. Start Video
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             video.srcObject = stream;
             await video.play();
 
-            // 2. Force WebGL Backend (Crucial for Safari)
-            status.innerText = "Initializing WebGL...";
-            await tf.setBackend('webgl');
-            await tf.ready();
+            // 3. Load Detector
+            detector = await setupDetector();
 
-            // 3. Load Model
-            status.innerText = "Downloading AI Weights...";
-            model = await handpose.load();
-            
-            // 4. Setup Gestures
+            // 4. Define Gestures
             const rock = new fp.GestureDescription('rock');
             const paper = new fp.GestureDescription('paper');
             const scissors = new fp.GestureDescription('scissors');
 
-            [fp.Finger.Thumb, fp.Finger.Index, fp.Finger.Middle, fp.Finger.Ring, fp.Finger.Pinky].forEach(f => {
-                rock.addCurl(f, fp.FingerCurl.FullCurl, 1.0);
-                paper.addCurl(f, fp.FingerCurl.NoCurl, 1.0);
-            });
-            
+            // Logic: All curled = Rock
+            [0,1,2,3,4].forEach(f => rock.addCurl(f, fp.FingerCurl.FullCurl, 1.0));
+            // Logic: All flat = Paper
+            [0,1,2,3,4].forEach(f => paper.addCurl(f, fp.FingerCurl.NoCurl, 1.0));
+            // Logic: Index/Middle flat, others curled = Scissors
             scissors.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
             scissors.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
             [fp.Finger.Thumb, fp.Finger.Ring, fp.Finger.Pinky].forEach(f => scissors.addCurl(f, fp.FingerCurl.FullCurl, 1.0));
 
-            estimator = new fp.GestureEstimator([rock, paper, scissors]);
+            GE = new fp.GestureEstimator([rock, paper, scissors]);
 
-            document.getElementById('start-overlay').classList.add('hidden');
-            detect();
+            document.getElementById('overlay').style.display = 'none';
+            loop();
         } catch (err) {
             status.innerText = "Error: " + err.message;
-            console.error(err);
         }
     }
 
-    async function detect() {
-        const predictions = await model.estimateHands(video);
+    async function loop() {
+        const hands = await detector.estimateHands(video);
         
-        if (predictions.length > 0 && !cooldown) {
-            const gesture = await estimator.estimate(predictions[0].landmarks, 8.5);
+        if (hands.length > 0 && canPlay) {
+            // Transform landmarks to Fingerpose format
+            const landmarks = hands[0].keypoints.map(kp => [kp.x, kp.y, 0]);
+            const gesture = await GE.estimate(landmarks, 7.5);
+
             if (gesture.gestures.length > 0) {
                 const best = gesture.gestures.sort((a,b) => b.confidence - a.confidence)[0];
-                playRound(best.name);
+                handleResult(best.name);
             }
         }
-        requestAnimationFrame(detect);
+        requestAnimationFrame(loop);
     }
 
-    function playRound(player) {
-        cooldown = true;
+    function handleResult(player) {
+        canPlay = false;
         const choices = ['rock', 'paper', 'scissors'];
         const cpu = choices[Math.floor(Math.random() * 3)];
         
-        if (player === cpu) resultEl.innerText = "TIE!";
-        else if ((player === 'rock' && cpu === 'scissors') || 
-                 (player === 'paper' && cpu choice === 'rock') || 
-                 (player === 'scissors' && cpu === 'paper')) {
-            resultEl.innerText = "YOU WIN!";
+        let winStatus = "";
+        if (player === cpu) winStatus = "TIE";
+        else if (
+            (player === 'rock' && cpu === 'scissors') || 
+            (player === 'paper' && cpu === 'rock') || 
+            (player === 'scissors' && cpu === 'paper')
+        ) {
+            winStatus = "YOU WIN!";
             scores.p++;
         } else {
-            resultEl.innerText = "YOU LOSE!";
+            winStatus = "YOU LOSE!";
             scores.c++;
         }
 
+        resultDisplay.innerText = winStatus;
         document.getElementById('p-score').innerText = scores.p;
         document.getElementById('c-score').innerText = scores.c;
 
+        // Reset for next round after 3 seconds
         setTimeout(() => {
-            resultEl.innerText = "GO!";
-            cooldown = false;
-        }, 2000);
+            resultDisplay.innerText = "GO!";
+            canPlay = true;
+        }, 3000);
     }
 
-    document.getElementById('start-btn').addEventListener('click', init);
+    document.getElementById('start-btn').addEventListener('click', start);
 </script>
 </body>
 </html>
