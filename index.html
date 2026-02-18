@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Gesture RPS</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.0.2/dist/fingerpose.js"></script>
 
     <style>
@@ -21,261 +21,209 @@
             margin: 0;
             background-color: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, sans-serif;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
             overflow: hidden;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
         }
 
         #game-container {
             position: relative;
             width: 90vw;
-            max-width: 600px;
+            max-width: 500px;
             background: var(--card);
-            padding: 20px;
-            border-radius: 24px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            padding: 30px;
+            border-radius: 32px;
             text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4);
         }
 
-        .video-wrapper {
+        .video-box {
             position: relative;
             width: 100%;
-            aspect-ratio: 4/3;
+            aspect-ratio: 1/1;
             background: #000;
-            border-radius: 16px;
+            border-radius: 20px;
             overflow: hidden;
-            margin-bottom: 20px;
+            margin: 20px 0;
             border: 2px solid #334155;
         }
 
         video, canvas {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             object-fit: cover;
             transform: scaleX(-1);
         }
 
-        .ui-overlay {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        #result-display {
-            font-size: 2.5rem;
-            font-weight: 800;
-            height: 4rem;
-            margin: 10px 0;
-            color: var(--accent);
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .score-box {
-            background: #334155;
-            padding: 10px 20px;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
-        #start-btn {
-            background: var(--accent);
-            color: var(--bg);
-            border: none;
-            padding: 16px 40px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            z-index: 100;
-        }
-
-        #start-btn:active { transform: scale(0.95); }
-
-        .overlay-screen {
+        #start-overlay {
             position: absolute;
             inset: 0;
-            background: rgba(15, 23, 42, 0.9);
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 10;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-radius: 24px;
-            z-index: 10;
+            border-radius: 20px;
         }
 
-        .icon { width: 48px; height: 48px; fill: currentColor; margin-bottom: 10px; }
+        button {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            padding: 18px 36px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            border-radius: 16px;
+            cursor: pointer;
+        }
+
+        #result-text {
+            font-size: 2.2rem;
+            font-weight: 900;
+            height: 3rem;
+            color: var(--accent);
+        }
+
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        .loader {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #fff;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: inline-block;
+            animation: rotation 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .hidden { display: none !important; }
-
-        #status-text {
-            font-size: 0.9rem;
-            color: #94a3b8;
-            margin-top: 10px;
-        }
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <div class="ui-overlay">
-        <div class="score-box">PLAYER: <span id="p-score">0</span></div>
-        <div class="score-box">CPU: <span id="c-score">0</span></div>
+    <div class="score-row">
+        <span>PLAYER: <span id="p-score">0</span></span>
+        <span>CPU: <span id="c-score">0</span></span>
     </div>
 
-    <div class="video-wrapper">
-        <video id="video" playsinline></video>
+    <div class="video-box">
+        <video id="video" playsinline muted></video>
         <canvas id="canvas"></canvas>
         
-        <div id="setup-screen" class="overlay-screen">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
-            <button id="start-btn">INITIALIZE GAME</button>
-            <p id="status-text">Click to enable camera</p>
+        <div id="start-overlay">
+            <div id="loading-spinner" class="hidden"><span class="loader"></span></div>
+            <button id="start-btn">START GAME</button>
+            <p id="status" style="margin-top: 15px; font-size: 0.8rem; color: #94a3b8;">Click to initialize AI and Camera</p>
         </div>
     </div>
 
-    <div id="result-display">READY?</div>
-    
-    <div id="gesture-hint" style="color: #64748b;">
-        Detection: <span id="detected-gesture">None</span>
+    <div id="result-text">READY?</div>
+    <div id="cpu-icon" style="margin-top:10px;">
+        <svg width="40" height="40" fill="#64748b" viewBox="0 0 24 24"><path d="M20 9V7c0-1.1-.9-2-2-2h-3V3h-2v2h-2V3H9v2H6c-1.1 0-2 .9-2 2v2H2v2h2v2H2v2h2v2c0 1.1.9 2 2 2h3v2h2v-2h2v2h2v-2h3c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2zm-4 6H8V8h8v7z"/></svg>
     </div>
 </div>
 
 <script>
-    let video, canvas, ctx, model, gestureEstimator;
-    let pScore = 0, cScore = 0;
-    let isPlaying = false;
-    let lastResultTime = 0;
-
-    const gestures = {
-        rock: 'rock',
-        paper: 'paper',
-        scissors: 'scissors'
-    };
-
-    async function setupCamera() {
-        video = document.getElementById('video');
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: 640, height: 480 },
-            audio: false
-        });
-        video.srcObject = stream;
-        return new Promise((resolve) => {
-            video.onloadedmetadata = () => resolve(video);
-        });
-    }
-
-    function createGestures() {
-        const rock = new fp.GestureDescription('rock');
-        const paper = new fp.GestureDescription('paper');
-        const scissors = new fp.GestureDescription('scissors');
-
-        // Rock: All fingers curled
-        for(let finger of [fp.Finger.Thumb, fp.Finger.Index, fp.Finger.Middle, fp.Finger.Ring, fp.Finger.Pinky]) {
-            rock.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
-        }
-
-        // Paper: All fingers extended
-        for(let finger of [fp.Finger.Thumb, fp.Finger.Index, fp.Finger.Middle, fp.Finger.Ring, fp.Finger.Pinky]) {
-            paper.addCurl(finger, fp.FingerCurl.NoCurl, 1.0);
-        }
-
-        // Scissors: Index and Middle extended, others curled
-        scissors.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-        scissors.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-        for(let finger of [fp.Finger.Thumb, fp.Finger.Ring, fp.Finger.Pinky]) {
-            scissors.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
-        }
-
-        return [rock, paper, scissors];
-    }
+    const video = document.getElementById('video');
+    const resultEl = document.getElementById('result-text');
+    let model, estimator;
+    let scores = { p: 0, c: 0 };
+    let cooldown = false;
 
     async function init() {
-        const btn = document.getElementById('start-btn');
-        const status = document.getElementById('status-text');
-        btn.disabled = true;
-        status.innerText = "Loading AI Models...";
-
+        document.getElementById('start-btn').classList.add('hidden');
+        document.getElementById('loading-spinner').classList.remove('hidden');
+        const status = document.getElementById('status');
+        
         try {
-            await setupCamera();
-            video.play();
+            // 1. Setup Camera
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            video.srcObject = stream;
+            await video.play();
 
+            // 2. Force WebGL Backend (Crucial for Safari)
+            status.innerText = "Initializing WebGL...";
+            await tf.setBackend('webgl');
+            await tf.ready();
+
+            // 3. Load Model
+            status.innerText = "Downloading AI Weights...";
             model = await handpose.load();
-            const knownGestures = createGestures();
-            gestureEstimator = new fp.GestureEstimator(knownGestures);
-
-            document.getElementById('setup-screen').classList.add('hidden');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-
-            gameLoop();
-        } catch (e) {
-            status.innerText = "Error: Camera access denied.";
-            console.error(e);
-        }
-    }
-
-    function playRound(playerChoice) {
-        const choices = ['rock', 'paper', 'scissors'];
-        const cpuChoice = choices[Math.floor(Math.random() * 3)];
-        const resultEl = document.getElementById('result-display');
-        
-        let result = "";
-        if (playerChoice === cpuChoice) {
-            result = "Tie";
-        } else if (
-            (playerChoice === 'rock' && cpuChoice === 'scissors') ||
-            (playerChoice === 'paper' && cpuChoice === 'rock') ||
-            (playerChoice === 'scissors' && cpuChoice === 'paper')
-        ) {
-            result = "You Win!";
-            pScore++;
-        } else {
-            result = "You Lose!";
-            cScore++;
-        }
-
-        resultEl.innerText = result;
-        document.getElementById('p-score').innerText = pScore;
-        document.getElementById('c-score').innerText = cScore;
-        
-        isPlaying = true;
-        setTimeout(() => { isPlaying = false; }, 2500); // 2.5s cooldown
-    }
-
-    async function gameLoop() {
-        const predictions = await model.estimateHands(video);
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (predictions.length > 0) {
-            const gesture = await gestureEstimator.estimate(predictions[0].landmarks, 8.5);
             
-            if (gesture.gestures && gesture.gestures.length > 0) {
-                const best = gesture.gestures.reduce((p, c) => (p.confidence > c.confidence) ? p : c);
-                document.getElementById('detected-gesture').innerText = best.name;
+            // 4. Setup Gestures
+            const rock = new fp.GestureDescription('rock');
+            const paper = new fp.GestureDescription('paper');
+            const scissors = new fp.GestureDescription('scissors');
 
-                if (!isPlaying) {
-                    playRound(best.name);
-                }
+            [fp.Finger.Thumb, fp.Finger.Index, fp.Finger.Middle, fp.Finger.Ring, fp.Finger.Pinky].forEach(f => {
+                rock.addCurl(f, fp.FingerCurl.FullCurl, 1.0);
+                paper.addCurl(f, fp.FingerCurl.NoCurl, 1.0);
+            });
+            
+            scissors.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+            scissors.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
+            [fp.Finger.Thumb, fp.Finger.Ring, fp.Finger.Pinky].forEach(f => scissors.addCurl(f, fp.FingerCurl.FullCurl, 1.0));
+
+            estimator = new fp.GestureEstimator([rock, paper, scissors]);
+
+            document.getElementById('start-overlay').classList.add('hidden');
+            detect();
+        } catch (err) {
+            status.innerText = "Error: " + err.message;
+            console.error(err);
+        }
+    }
+
+    async function detect() {
+        const predictions = await model.estimateHands(video);
+        
+        if (predictions.length > 0 && !cooldown) {
+            const gesture = await estimator.estimate(predictions[0].landmarks, 8.5);
+            if (gesture.gestures.length > 0) {
+                const best = gesture.gestures.sort((a,b) => b.confidence - a.confidence)[0];
+                playRound(best.name);
             }
+        }
+        requestAnimationFrame(detect);
+    }
+
+    function playRound(player) {
+        cooldown = true;
+        const choices = ['rock', 'paper', 'scissors'];
+        const cpu = choices[Math.floor(Math.random() * 3)];
+        
+        if (player === cpu) resultEl.innerText = "TIE!";
+        else if ((player === 'rock' && cpu === 'scissors') || 
+                 (player === 'paper' && cpu choice === 'rock') || 
+                 (player === 'scissors' && cpu === 'paper')) {
+            resultEl.innerText = "YOU WIN!";
+            scores.p++;
         } else {
-            document.getElementById('detected-gesture').innerText = "Searching...";
+            resultEl.innerText = "YOU LOSE!";
+            scores.c++;
         }
 
-        requestAnimationFrame(gameLoop);
+        document.getElementById('p-score').innerText = scores.p;
+        document.getElementById('c-score').innerText = scores.c;
+
+        setTimeout(() => {
+            resultEl.innerText = "GO!";
+            cooldown = false;
+        }, 2000);
     }
 
     document.getElementById('start-btn').addEventListener('click', init);
