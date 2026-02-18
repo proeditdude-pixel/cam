@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Gesture Arcade</title>
+    <title>AI Gesture Arcade Pro</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -11,239 +11,270 @@
 
     <style>
         :root {
-            --bg: #020617;
-            --card: #0f172a;
-            --accent: #38bdf8;
-            --danger: #f43f5e;
-            --success: #10b981;
-            --text: #f8fafc;
+            --bg: #050505;
+            --surface: #121214;
+            --accent: #00f2ff;
+            --card: rgba(255, 255, 255, 0.05);
+            --text: #ffffff;
         }
 
         body, html {
             margin: 0; padding: 0; width: 100%; height: 100%;
             background: var(--bg); color: var(--text);
-            font-family: -apple-system, system-ui, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             overflow: hidden;
         }
 
-        /* Home Menu */
-        #home-menu {
+        /* Launcher UI */
+        #launcher {
             position: absolute; inset: 0; z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            background: radial-gradient(circle at 50% 50%, #1a1a1f 0%, #050505 100%);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        .menu-title { font-size: 2.5rem; font-weight: 900; margin-bottom: 40px; letter-spacing: -1px; }
-
-        .game-grid { display: flex; gap: 20px; padding: 20px; }
-
-        .game-card {
-            background: var(--card); border: 1px solid #334155;
-            padding: 30px; border-radius: 24px; width: 160px; text-align: center;
-            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        .grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+            max-width: 800px; padding: 40px;
         }
 
-        .game-card:hover { transform: translateY(-10px); border-color: var(--accent); box-shadow: 0 0 30px rgba(56, 189, 248, 0.2); }
-        .game-card svg { width: 50px; height: 50px; fill: var(--accent); margin-bottom: 15px; }
+        .app-icon {
+            background: var(--card); border: 1px solid rgba(255,255,255,0.1);
+            width: 140px; height: 140px; border-radius: 30px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.3s; backdrop-filter: blur(10px);
+        }
 
-        /* Game Containers */
+        .app-icon:active { transform: scale(0.9); }
+        .app-icon svg { width: 50px; height: 50px; fill: var(--accent); margin-bottom: 12px; }
+        .app-icon span { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Game Interface */
         .game-view { position: absolute; inset: 0; display: none; }
-        .active { display: block !important; }
+        .active-view { display: block !important; }
+
+        canvas { width: 100%; height: 100%; display: block; }
+        
+        .hud {
+            position: absolute; top: 40px; left: 0; right: 0;
+            display: flex; justify-content: space-between; padding: 0 40px;
+            pointer-events: none; z-index: 50;
+        }
+
+        .hud-item { background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); }
 
         .back-btn {
-            position: absolute; top: 20px; left: 20px; z-index: 1000;
-            background: rgba(255,255,255,0.1); border: none; color: white;
-            padding: 10px 15px; border-radius: 12px; font-weight: bold; cursor: pointer;
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: white; color: black; border: none; padding: 12px 30px;
+            border-radius: 50px; font-weight: 800; cursor: pointer; z-index: 1000;
         }
 
-        /* RPS Elements */
-        #rps-ui { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); text-align: center; width: 100%; }
-        #rps-result { font-size: 4rem; font-weight: 900; color: var(--accent); text-shadow: 0 0 20px rgba(56,189,248,0.5); }
+        #video-preview {
+            position: absolute; bottom: 20px; right: 20px; width: 120px; aspect-ratio: 4/3;
+            border-radius: 15px; border: 2px solid var(--accent); transform: scaleX(-1);
+            object-fit: cover; z-index: 500;
+        }
 
-        /* Neon Dodge Elements */
-        #dodge-canvas { width: 100vw; height: 100vh; display: block; }
-        #dodge-ui { position: absolute; top: 20px; right: 20px; text-align: right; }
-
-        #video-hidden { display: none; }
-        #loading-overlay { 
-            position: absolute; inset: 0; background: var(--bg); 
-            display: none; align-items: center; justify-content: center; z-index: 200; 
+        #boot-screen {
+            position: absolute; inset: 0; background: black; z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
         }
     </style>
 </head>
 <body>
 
-    <div id="loading-overlay">Initializing AI Engine...</div>
+    <div id="boot-screen">
+        <button onclick="initArcade()" style="background:var(--accent); border:none; padding:20px 50px; border-radius:15px; font-weight:900;">INITIALIZE ARCADE</button>
+    </div>
 
-    <div id="home-menu">
-        <h1 class="menu-title">GESTURE ARCADE</h1>
-        <div class="game-grid">
-            <div class="game-card" onclick="launchGame('rps')">
+    <div id="launcher">
+        <h1 style="margin-bottom:40px; font-weight:900; letter-spacing:-2px; font-size:3rem;">ARCADE</h1>
+        <div class="grid">
+            <div class="app-icon" onclick="openGame('rps')">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h10v2H7z"/></svg>
-                <h3>RPS ARENA</h3>
+                <span>RPS Arena</span>
             </div>
-            <div class="game-card" onclick="launchGame('dodge')">
-                <svg viewBox="0 0 24 24"><path d="M13.13 22.19l-1.63-3.83c1.57-.64 3.04-1.55 4.37-2.71l2.86 3.29c-1.71 1.41-3.63 2.5-5.6 3.25M5.27 18.94l2.86-3.29c1.33 1.16 2.8 2.07 4.37 2.71l-1.63 3.83c-1.97-.75-3.89-1.84-5.6-3.25M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
-                <h3>NEON DODGE</h3>
+            <div class="app-icon" onclick="openGame('dodge')">
+                <svg viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
+                <span>Dodge</span>
+            </div>
+            <div class="app-icon" onclick="openGame('music')">
+                <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                <span>Zen Music</span>
+            </div>
+            <div class="app-icon" onclick="openGame('gravity')">
+                <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm0 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+                <span>Gravity</span>
+            </div>
+            <div class="app-icon" onclick="openGame('burst')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+                <span>Burst</span>
             </div>
         </div>
     </div>
 
-    <div id="game-rps" class="game-view">
-        <button class="back-btn" onclick="exitGame()">EXIT</button>
-        <video id="rps-video" playsinline style="width:100%; height:100%; object-fit:cover; transform:scaleX(-1);"></video>
-        <div id="rps-ui">
-            <div id="rps-countdown" style="font-size: 5rem; font-weight: 900;"></div>
-            <div id="rps-result">READY?</div>
-            <p>Score: <span id="p-score">0</span> - <span id="c-score">0</span></p>
+    <div id="stage" class="game-view">
+        <div class="hud">
+            <div class="hud-item">GAME: <span id="game-title">---</span></div>
+            <div class="hud-item">SCORE: <span id="score">0</span></div>
         </div>
+        <canvas id="gameCanvas"></canvas>
+        <video id="video-preview" playsinline muted></video>
+        <button class="back-btn" onclick="closeGame()">EXIT TO MENU</button>
     </div>
 
-    <div id="game-dodge" class="game-view">
-        <button class="back-btn" onclick="exitGame()">EXIT</button>
-        <canvas id="dodge-canvas"></canvas>
-        <div id="dodge-ui">
-            <h2 id="dodge-score">0</h2>
-            <div id="shield-status" style="color: var(--accent); font-weight: bold;">SHIELD: READY</div>
-        </div>
-    </div>
+    <video id="hidden-video" playsinline muted style="display:none"></video>
 
-    <video id="video-hidden" playsinline muted></video>
+<script>
+    let currentMode = null;
+    let hands, camera, GE;
+    let canvas, ctx;
+    let score = 0;
+    let player = { x: 0, y: 0, z: 0, gesture: '' };
+    let objects = [];
+    let audioCtx, oscillator;
 
-    <script>
-        let currentMode = null;
-        let hands, camera;
-        let GE, scores = {p:0, c:0};
-        let dodgeState = { active: false, x:0, y:0, score:0, life:100, enemies:[], shield: false, shieldCharge: 100 };
-        
-        // --- Shared AI Core ---
-        async function setupAI() {
-            document.getElementById('loading-overlay').style.display = 'flex';
-            
-            // Gestures
-            const rock = new fp.GestureDescription('rock');
-            const paper = new fp.GestureDescription('paper');
-            const scissors = new fp.GestureDescription('scissors');
-            [0,1,2,3,4].forEach(f => { rock.addCurl(f, fp.FingerCurl.FullCurl, 1.0); paper.addCurl(f, fp.FingerCurl.NoCurl, 1.0); });
-            scissors.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
-            scissors.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 1.0);
-            [fp.Finger.Thumb, fp.Finger.Ring, fp.Finger.Pinky].forEach(f => scissors.addCurl(f, fp.FingerCurl.FullCurl, 1.0));
-            GE = new fp.GestureEstimator([rock, paper, scissors]);
+    async function initArcade() {
+        document.getElementById('boot-screen').style.display = 'none';
+        canvas = document.getElementById('gameCanvas');
+        ctx = canvas.getContext('2d');
+        resize();
 
-            hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6});
-            hands.onResults(onResults);
+        // Load Gestures
+        const rock = new fp.GestureDescription('rock');
+        const paper = new fp.GestureDescription('paper');
+        const scissors = new fp.GestureDescription('scissors');
+        [0,1,2,3,4].forEach(f => { rock.addCurl(f, fp.FingerCurl.FullCurl, 1.0); paper.addCurl(f, fp.FingerCurl.NoCurl, 1.0); });
+        GE = new fp.GestureEstimator([rock, paper, scissors]);
 
-            camera = new Camera(document.getElementById('video-hidden'), {
-                onFrame: async () => { await hands.send({image: document.getElementById('video-hidden')}); },
-                width: 640, height: 480
-            });
-
-            await camera.start();
-            document.getElementById('loading-overlay').style.display = 'none';
-        }
-
-        function onResults(results) {
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-            const landmarks = results.multiHandLandmarks[0];
-
-            if (currentMode === 'rps') {
-                const mapped = landmarks.map(l => [l.x * 400, l.y * 400, l.z]);
-                const gesture = GE.estimate(mapped, 7.5);
-                if (gesture.gestures.length > 0) handleRPS(gesture.gestures[0].name);
-            } 
-            else if (currentMode === 'dodge') {
-                dodgeState.x = (1 - landmarks[8].x) * window.innerWidth;
-                dodgeState.y = landmarks[8].y * window.innerHeight;
+        hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+        hands.setOptions({maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5});
+        hands.onResults(results => {
+            if (results.multiHandLandmarks?.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                player.x = (1 - lm[8].x) * canvas.width;
+                player.y = lm[8].y * canvas.height;
                 
-                // Detection for Powerup (Open Palm = Shield)
-                const mapped = landmarks.map(l => [l.x * 400, l.y * 400, l.z]);
-                const gesture = GE.estimate(mapped, 7.5);
-                dodgeState.shield = (gesture.gestures.some(g => g.name === 'paper') && dodgeState.shieldCharge > 0);
+                const mapped = lm.map(p => [p.x * 400, p.y * 400, p.z]);
+                const est = GE.estimate(mapped, 7.5);
+                player.gesture = est.gestures[0]?.name || '';
             }
+        });
+
+        camera = new Camera(document.getElementById('hidden-video'), {
+            onFrame: async () => { await hands.send({image: document.getElementById('hidden-video')}); },
+            width: 640, height: 480
+        });
+        await camera.start();
+        document.getElementById('video-preview').srcObject = document.getElementById('hidden-video').srcObject;
+        document.getElementById('video-preview').play();
+    }
+
+    function openGame(mode) {
+        currentMode = mode;
+        score = 0;
+        objects = [];
+        document.getElementById('game-title').innerText = mode.toUpperCase();
+        document.getElementById('launcher').style.transform = 'translateY(-100%)';
+        document.getElementById('stage').classList.add('active-view');
+        
+        if(mode === 'music') initAudio();
+        gameLoop();
+    }
+
+    function closeGame() {
+        currentMode = null;
+        if(oscillator) oscillator.stop();
+        document.getElementById('launcher').style.transform = 'translateY(0)';
+        document.getElementById('stage').classList.remove('active-view');
+    }
+
+    function gameLoop() {
+        if (!currentMode) return;
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Core Player Cursor
+        ctx.shadowBlur = 15; ctx.shadowColor = varColor();
+        ctx.fillStyle = varColor();
+        ctx.beginPath(); ctx.arc(player.x, player.y, 12, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Game Specific Logic
+        if (currentMode === 'dodge') updateDodge();
+        if (currentMode === 'gravity') updateGravity();
+        if (currentMode === 'burst') updateBurst();
+        if (currentMode === 'music') updateMusic();
+        if (currentMode === 'rps') updateRPS();
+
+        document.getElementById('score').innerText = score;
+        requestAnimationFrame(gameLoop);
+    }
+
+    function varColor() {
+        if (currentMode === 'dodge') return '#ff3e3e';
+        if (currentMode === 'music') return '#bc3eff';
+        return '#00f2ff';
+    }
+
+    // --- GAME MODULES ---
+
+    function updateDodge() {
+        if(Math.random() < 0.05) objects.push({x: Math.random()*canvas.width, y: -20, s: 5+Math.random()*5});
+        objects.forEach((o, i) => {
+            o.y += o.s;
+            ctx.fillStyle = 'white'; ctx.fillRect(o.x, o.y, 15, 15);
+            if(Math.hypot(player.x-o.x, player.y-o.y) < 30) { score = 0; objects = []; }
+            if(o.y > canvas.height) { objects.splice(i,1); score++; }
+        });
+    }
+
+    function updateGravity() {
+        if(objects.length === 0) objects.push({x: canvas.width/2, y: 0, vx: 2, vy: 2});
+        let b = objects[0];
+        b.x += b.vx; b.y += b.vy; b.vy += 0.2;
+        if(b.x < 0 || b.x > canvas.width) b.vx *= -1;
+        if(Math.hypot(player.x-b.x, player.y-b.y) < 50 && b.vy > 0) { b.vy = -12; score++; }
+        if(b.y > canvas.height) { b.y = 0; score = 0; }
+        ctx.fillStyle = varColor(); ctx.beginPath(); ctx.arc(b.x, b.y, 20, 0, Math.PI*2); ctx.fill();
+    }
+
+    function updateBurst() {
+        if(Math.random() < 0.03) objects.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: 40});
+        objects.forEach((o, i) => {
+            o.r -= 0.2;
+            ctx.strokeStyle = varColor(); ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.stroke();
+            if(Math.hypot(player.x-o.x, player.y-o.y) < o.r) { objects.splice(i,1); score++; }
+            if(o.r <= 0) { objects.splice(i,1); score--; }
+        });
+    }
+
+    function initAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        oscillator = audioCtx.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.connect(audioCtx.destination);
+        oscillator.start();
+    }
+
+    function updateMusic() {
+        if(!oscillator) return;
+        let freq = 200 + ( (canvas.height - player.y) / canvas.height ) * 800;
+        oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        ctx.strokeStyle = '#bc3eff';
+        for(let i=0; i<10; i++) {
+            ctx.beginPath(); ctx.arc(player.x, player.y, i*15, 0, Math.PI*2); ctx.stroke();
         }
+    }
 
-        // --- RPS Logic ---
-        let rpsCooldown = false;
-        async function handleRPS(player) {
-            if (rpsCooldown) return;
-            rpsCooldown = true;
-            
-            const countEl = document.getElementById('rps-countdown');
-            for(let i=3; i>0; i--) { countEl.innerText = i; await new Promise(r => setTimeout(r, 600)); }
-            countEl.innerText = "";
+    function updateRPS() {
+        ctx.font = 'bold 40px sans-serif'; ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+        ctx.fillText("GESTURE: " + (player.gesture || "WAITING"), canvas.width/2, canvas.height/2);
+    }
 
-            const cpu = ['rock', 'paper', 'scissors'][Math.floor(Math.random()*3)];
-            let res = (player === cpu) ? "DRAW" : 
-                      ((player==='rock'&&cpu==='scissors')||(player==='paper'&&cpu==='rock')||(player==='scissors'&&cpu==='paper')) ? "WIN" : "LOSE";
-            
-            if(res === "WIN") scores.p++; if(res === "LOSE") scores.c++;
-            document.getElementById('rps-result').innerText = `CPU: ${cpu.toUpperCase()} | ${res}`;
-            document.getElementById('p-score').innerText = scores.p;
-            document.getElementById('c-score').innerText = scores.c;
-
-            setTimeout(() => { document.getElementById('rps-result').innerText = "READY?"; rpsCooldown = false; }, 2000);
-        }
-
-        // --- Dodge Logic ---
-        function dodgeLoop() {
-            if (currentMode !== 'dodge') return;
-            const ctx = document.getElementById('dodge-canvas').getContext('2d');
-            ctx.fillStyle = 'rgba(2, 6, 23, 0.2)';
-            ctx.fillRect(0,0,window.innerWidth, window.innerHeight);
-
-            // Player
-            ctx.shadowBlur = 15; ctx.shadowColor = dodgeState.shield ? '#10b981' : '#38bdf8';
-            ctx.fillStyle = ctx.shadowColor;
-            ctx.beginPath(); ctx.arc(dodgeState.x, dodgeState.y, 20, 0, Math.PI*2); ctx.fill();
-
-            // Enemies
-            if (Math.random() < 0.05) dodgeState.enemies.push({x: Math.random()*window.innerWidth, y: -50, s: 5+Math.random()*5});
-            
-            dodgeState.enemies.forEach((e, i) => {
-                e.y += e.s;
-                ctx.fillStyle = '#f43f5e';
-                ctx.fillRect(e.x, e.y, 30, 30);
-
-                let dist = Math.hypot(dodgeState.x - e.x, dodgeState.y - e.y);
-                if (dist < 40) {
-                    if (!dodgeState.shield) { alert("Hit! Score: " + dodgeState.score); exitGame(); }
-                    else { dodgeState.enemies.splice(i, 1); dodgeState.shieldCharge -= 20; }
-                }
-            });
-            
-            if(dodgeState.shield) dodgeState.shieldCharge -= 0.5;
-            else if(dodgeState.shieldCharge < 100) dodgeState.shieldCharge += 0.2;
-            document.getElementById('shield-status').innerText = `SHIELD: ${Math.floor(dodgeState.shieldCharge)}%`;
-            document.getElementById('dodge-score').innerText = dodgeState.score++;
-
-            requestAnimationFrame(dodgeLoop);
-        }
-
-        // --- Navigation ---
-        function launchGame(mode) {
-            currentMode = mode;
-            document.getElementById('home-menu').style.display = 'none';
-            document.querySelectorAll('.game-view').forEach(v => v.classList.remove('active'));
-            document.getElementById('game-' + mode).classList.add('active');
-            
-            if (!hands) setupAI();
-            if (mode === 'dodge') {
-                const cvs = document.getElementById('dodge-canvas');
-                cvs.width = window.innerWidth; cvs.height = window.innerHeight;
-                dodgeState.enemies = []; dodgeState.score = 0; dodgeState.shieldCharge = 100;
-                dodgeLoop();
-            } else {
-                document.getElementById('rps-video').srcObject = document.getElementById('video-hidden').srcObject;
-                document.getElementById('rps-video').play();
-            }
-        }
-
-        function exitGame() {
-            currentMode = null;
-            document.getElementById('home-menu').style.display = 'flex';
-            document.querySelectorAll('.game-view').forEach(v => v.classList.remove('active'));
-        }
-    </script>
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.onresize = resize;
+</script>
 </body>
 </html>
